@@ -92,7 +92,7 @@ class ComplianceRequestAPI(BaseModel):
 @app.post("/api/compliance/check")
 async def get_compliance_check(request: ComplianceRequestAPI):
     try:
-        from backend.services.compliance_engine import check_compliance
+        from services.compliance_engine import check_compliance
         result = check_compliance(
             product_desc=request.product_description,
             tech_spec=request.technical_specification,
@@ -171,7 +171,7 @@ async def generate_clause_api(request: ClauseRequest, req: Request = None):
 
         return safe_clause_data
     except Exception as e:
-        logger.error(f"Error generating clause: {e}")
+        print(f"Error generating clause: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/audit")
@@ -304,7 +304,7 @@ async def get_directory(
 async def health_check():
     import os
     try:
-        from backend.services.vector_search import vector_service
+        from services.vector_search import vector_service
         is_vector_loaded = vector_service.is_available()
         indexed_records = vector_service.get_indexed_count() if is_vector_loaded else 0
     except:

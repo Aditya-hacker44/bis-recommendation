@@ -5,8 +5,8 @@ import numpy as np
 from pydantic import BaseModel
 from typing import List, Optional
 
-from sentence_transformers import SentenceTransformer
-
+# from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VECTOR_DIR = os.path.join(BASE_DIR, "data", "vector_store")
 MODEL_NAME = "all-MiniLM-L6-v2"
@@ -37,9 +37,6 @@ class VectorSearchService:
             with open(config_path, "r", encoding="utf-8") as f:
                 self.config = json.load(f)
                 
-            print(f"Loading local model: {MODEL_NAME} for inference...")
-            self.model = SentenceTransformer(MODEL_NAME)
-                
             self.is_loaded = True
             return True
         except Exception as e:
@@ -62,8 +59,19 @@ class VectorSearchService:
         if top_k <= 0 or top_k > 100:
             raise ValueError("Invalid top_k")
             
-        # For local queries
-        emb = self.model.encode(query.strip(), normalize_embeddings=True)
+        if self.model is None:
+            print(f"Loading lightweight local model: {MODEL_NAME} for inference...")
+            self.model = TextEmbedding(model_name=f"sentence-transformers/{MODEL_NAME}")
+            
+        # For local queries using fastembed
+        embeddings = list(self.model.embed([query.strip()]))
+        emb = embeddings[0]
+        
+        # Normalize the embedding for Cosine Similarity (FAISS FlatIP)
+        norm = np.linalg.norm(emb)
+        if norm > 0:
+            emb = emb / norm
+            
         query_emb = np.expand_dims(emb, axis=0).astype('float32')
         
         # We might need to fetch more if we apply post-filtering

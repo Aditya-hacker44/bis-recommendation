@@ -3,7 +3,7 @@ import os
 import faiss
 import numpy as np
 import time
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 
 DATA_FILE = "data/processed/normalized_standards.json"
 VECTOR_DIR = "data/vector_store"
@@ -14,8 +14,8 @@ def ensure_dir(path):
         os.makedirs(path)
 
 def build_index():
-    print(f"Loading local model: {MODEL_NAME}...")
-    model = SentenceTransformer(MODEL_NAME)
+    print(f"Loading lightweight model: {MODEL_NAME}...")
+    model = TextEmbedding(model_name=f"sentence-transformers/{MODEL_NAME}")
     
     print(f"Loading data from {DATA_FILE}...")
     with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -45,12 +45,22 @@ def build_index():
     total_records = len(texts)
     print(f"Found {total_records} valid records to index.")
     
-    print("Generating embeddings (this may take a minute locally)...")
+    print("Generating embeddings (this is fast with fastembed)...")
     start_time = time.time()
     
-    # SentenceTransformer handles batching efficiently
-    embeddings = model.encode(texts, batch_size=64, show_progress_bar=True, normalize_embeddings=True)
-    embeddings = np.array(embeddings, dtype='float32')
+    # fastembed yields a generator of numpy arrays, we convert to a list
+    embeddings_list = list(model.embed(texts, batch_size=64))
+    
+    # Normalize embeddings for Cosine Similarity (IndexFlatIP)
+    normalized_embeddings = []
+    for emb in embeddings_list:
+        norm = np.linalg.norm(emb)
+        if norm > 0:
+            normalized_embeddings.append(emb / norm)
+        else:
+            normalized_embeddings.append(emb)
+            
+    embeddings = np.array(normalized_embeddings, dtype='float32')
     
     print("Building FAISS index...")
     d = embeddings.shape[1]

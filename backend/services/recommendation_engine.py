@@ -4,7 +4,7 @@ import re
 from typing import List, Dict, Any
 from pydantic import BaseModel
 
-from backend.services.vector_search import vector_service
+from services.vector_search import vector_service
 
 class RecommendationConfig:
     # Weights for English and Hinglish (relying heavily on strong Multilingual E5 embeddings)
