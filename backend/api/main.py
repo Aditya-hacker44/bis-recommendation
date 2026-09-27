@@ -106,7 +106,7 @@ async def get_compliance_check(request: ComplianceRequestAPI):
 @app.post("/api/recommend")
 async def get_recommendation_api(request: RecommendRequestAPI, req: Request = None):
     try:
-        from backend.services.recommendation_engine import get_recommendations
+        from services.recommendation_engine import get_recommendations
         result = get_recommendations(request.query, request.top_k)
         
         # Optionally log audit here if Agent J is needed
@@ -215,7 +215,7 @@ async def semantic_search(request: SearchRequest):
     if request.is_number: filters["is_number"] = request.is_number
         
     try:
-        from backend.services.vector_search import vector_service
+        from services.vector_search import vector_service
         if not vector_service.is_available():
             raise HTTPException(status_code=503, detail="Vector index or embedding model unavailable")
             
@@ -240,7 +240,7 @@ async def get_directory(
     limit: int = 50
 ):
     try:
-        from backend.services.vector_search import vector_service
+        from services.vector_search import vector_service
         if not vector_service.is_available():
             raise HTTPException(status_code=503, detail="Vector index unavailable")
             

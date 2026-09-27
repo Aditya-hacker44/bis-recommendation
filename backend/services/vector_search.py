@@ -5,9 +5,11 @@ import numpy as np
 from pydantic import BaseModel
 from typing import List, Optional
 
+from sentence_transformers import SentenceTransformer
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VECTOR_DIR = os.path.join(BASE_DIR, "data", "vector_store")
-MODEL_NAME = "intfloat/multilingual-e5-base"
+MODEL_NAME = "all-MiniLM-L6-v2"
 
 class VectorSearchService:
     def __init__(self):
@@ -35,8 +37,9 @@ class VectorSearchService:
             with open(config_path, "r", encoding="utf-8") as f:
                 self.config = json.load(f)
                 
-            from sentence_transformers import SentenceTransformer
+            print(f"Loading local model: {MODEL_NAME} for inference...")
             self.model = SentenceTransformer(MODEL_NAME)
+                
             self.is_loaded = True
             return True
         except Exception as e:
@@ -59,9 +62,9 @@ class VectorSearchService:
         if top_k <= 0 or top_k > 100:
             raise ValueError("Invalid top_k")
             
-        # For E5 queries
-        query_text = f"query: {query.strip()}"
-        query_emb = self.model.encode([query_text], normalize_embeddings=True).astype('float32')
+        # For local queries
+        emb = self.model.encode(query.strip(), normalize_embeddings=True)
+        query_emb = np.expand_dims(emb, axis=0).astype('float32')
         
         # We might need to fetch more if we apply post-filtering
         fetch_k = top_k * 5 if filters else top_k
