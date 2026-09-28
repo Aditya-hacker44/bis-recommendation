@@ -6,6 +6,7 @@ import Link from "next/link";
 import { INDIAN_STANDARDS_DB } from "../../data/indianStandards";
 import { TENDERS_DB, TenderMatch } from "../../data/tenders";
 import { getRecommendations } from "../../services/recommendationEngine";
+import { useAuth } from "../../context/AuthContext";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -91,6 +92,7 @@ function IconUsers() {
 }
 
 export default function SearchPage() {
+  const { user } = useAuth();   // ← Firebase current user
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [tenders, setTenders] = useState<TenderMatch[]>([]);
@@ -132,13 +134,17 @@ export default function SearchPage() {
   // Character count for textarea
   const [descCharCount, setDescCharCount] = useState(0);
 
-  // Load history from localStorage on mount
+  // Per-user localStorage key — isolates history per Firebase account
+  const historyKey = user?.uid ? `isrecommend_history_${user.uid}` : "isrecommend_history_guest";
+
+  // Load history from localStorage on mount / when user changes
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("isrecommend_history");
+      const saved = localStorage.getItem(historyKey);
       if (saved) setHistory(JSON.parse(saved));
+      else setHistory([]); // clear previous user's history from state
     } catch {}
-  }, []);
+  }, [historyKey]);
 
   function saveToHistory(q: string, stds: any[], tnds: TenderMatch[], cat: string, topIS: string) {
     const entry: HistoryEntry = {
@@ -152,7 +158,7 @@ export default function SearchPage() {
     };
     const updated = [entry, ...history].slice(0, 50);
     setHistory(updated);
-    localStorage.setItem("isrecommend_history", JSON.stringify(updated));
+    localStorage.setItem(historyKey, JSON.stringify(updated));
   }
 
   const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -333,58 +339,88 @@ export default function SearchPage() {
 
   async function handleAnalyzeDocument() {
     if (!selectedFile) return;
-    
+
     setLoading(true);
     setSearched(false);
     setErrorMsg("");
     setLoadingStep("Uploading document...");
-    
+
     try {
       const formData = new FormData();
       formData.append('file', selectedFile);
-      
+
       setLoadingStep("Extracting text and identifying product info...");
       const res = await fetch('/api/extract', {
         method: 'POST',
-        body: formData
+        body: formData,
       });
-      
+
       const data = await res.json();
-      
+
       if (!res.ok) {
         throw new Error(data.error || "Failed to process document");
       }
-      
-      setLoadingStep("Structuring product input...");
-      await sleep(20);
-      
+
       setExtractedData(data.extracted);
-      
-      const combined = `${data.extracted.productName} ${data.extracted.productDescription} ${data.extracted.technicalSpecifications} ${data.extracted.rawText}`;
-      
-      setLoadingStep("Matching BIS standards...");
+      setLoadingStep("Matching BIS Indian Standards via AI...");
       await sleep(20);
-      
-      // We do NOT invent BIS standards, we just pass the extracted text to our existing robust recommendation engine
-      const recs = getRecommendations(combined);
-      
-      if (recs) {
-        setResults(recs.standards);
+
+      // Build a rich query from all extracted fields + raw text for best semantic matching
+      const queryParts = [
+        data.extracted.productName,
+        data.extracted.productDescription,
+        data.extracted.technicalSpecifications,
+        data.extracted.material,
+        data.extracted.capacity,
+        data.extracted.voltage,
+        data.extracted.application,
+        data.extracted.rawText,
+      ]
+        .filter((p) => p && p !== "Not detected")
+        .join(" ");
+
+      // Call the REAL backend recommendation engine (same as Quick Search tab)
+      const backendRes = await fetch(`${API_BASE}/api/recommend`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: queryParts.substring(0, 2000), top_k: 5 }),
+      });
+
+      const recData = await backendRes.json();
+
+      if (recData.status === "SUCCESS") {
+        setBackendData(recData);
+        const allRecs = [
+          ...(recData.primary_recommendations || []),
+          ...(recData.alternative_recommendations || []),
+        ];
+        setResults(
+          allRecs.map((r: any) => ({
+            is_number: r.is_number,
+            title: r.title,
+            status: r.certification_information?.status || "Unknown",
+            reason: r.recommendation_reason,
+            score: r.final_score,
+          }))
+        );
         setAnalysis({
-          category: recs.detectedProduct,
-          specifications: recs.detectedSpecifications,
-          sector: recs.sector,
-          confidence: recs.confidence
+          category: recData.intent?.product || data.extracted.productName || "Unknown",
+          specifications: recData.intent?.technical_terms?.join(", ") || data.extracted.technicalSpecifications || "None",
+          sector: recData.intent?.domain || "General",
         });
-        setTenders(recs.tenders);
-        saveToHistory("Doc: " + (data.extracted.productName !== "Not detected" ? data.extracted.productName : selectedFile.name), recs.standards, recs.tenders, recs.detectedProduct, recs.standards[0]?.isNumber || "N/A");
+        saveToHistory(
+          "Doc: " + (data.extracted.productName !== "Not detected" ? data.extracted.productName : selectedFile.name),
+          allRecs,
+          [],
+          recData.intent?.domain || "Unknown",
+          recData.primary_recommendations?.[0]?.is_number || "N/A"
+        );
       } else {
         setResults([]);
         setAnalysis(null);
-        setTenders([]);
+        setBackendData(recData);
         saveToHistory("Doc: " + selectedFile.name, [], [], "No match", "N/A");
       }
-      
     } catch (err: any) {
       setErrorMsg(err.message || "An error occurred during extraction.");
     } finally {
@@ -695,17 +731,15 @@ export default function SearchPage() {
                   </div>
                 )}
 
-                {selectedFile && (
-                  <div className="mt-4 text-left">
-                    <button
-                      onClick={handleAnalyzeDocument}
-                      disabled={loading}
-                      className="w-full md:w-auto px-8 py-3 rounded-xl bg-gradient-to-r from-[#0B3558] to-[#1565C0] text-white font-bold tracking-wide hover:from-[#092a47] hover:to-[#1256a3] transition-all disabled:opacity-50 shadow-md"
-                    >
-                      Analyze Document
-                    </button>
-                  </div>
-                )}
+                <div className="mt-4 text-left">
+                  <button
+                    onClick={handleAnalyzeDocument}
+                    disabled={loading || !selectedFile}
+                    className="w-full md:w-auto px-8 py-3 rounded-xl bg-gradient-to-r from-[#0B3558] to-[#1565C0] text-white font-bold tracking-wide hover:from-[#092a47] hover:to-[#1256a3] transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-md"
+                  >
+                    {loading ? "Analyzing..." : "Analyze Document"}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -807,38 +841,7 @@ export default function SearchPage() {
       {searched && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           
-          {/* Extracted Information Section (Shown only if uploaded doc) */}
-          {extractedData && (
-            <div className="bg-white border border-[#16A34A]/30 rounded-2xl p-8 shadow-sm">
-              <h3 className="text-sm font-bold text-[#16A34A] uppercase tracking-wider mb-4 flex items-center gap-2">
-                <span>📄</span> Extracted Document Information
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
-                <div>
-                  <span className="text-gray-500 block text-xs uppercase tracking-wide mb-1">Product Name</span>
-                  <p className="font-semibold text-[#0B3558]">{extractedData.productName}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500 block text-xs uppercase tracking-wide mb-1">Product Description</span>
-                  <p className="font-medium text-[#172033] line-clamp-3">{extractedData.productDescription}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500 block text-xs uppercase tracking-wide mb-1">Technical Specifications</span>
-                  <p className="font-medium text-[#172033] line-clamp-3">{extractedData.technicalSpecifications}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500 block text-xs uppercase tracking-wide mb-1">Tender Requirements</span>
-                  <p className="font-medium text-[#172033] line-clamp-3">{extractedData.tenderRequirements}</p>
-                </div>
-              </div>
-              <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                 <div><span className="text-gray-500 block mb-0.5">Material:</span> <span className="font-semibold">{extractedData.material}</span></div>
-                 <div><span className="text-gray-500 block mb-0.5">Dimensions:</span> <span className="font-semibold">{extractedData.dimensions}</span></div>
-                 <div><span className="text-gray-500 block mb-0.5">Capacity:</span> <span className="font-semibold">{extractedData.capacity}</span></div>
-                 <div><span className="text-gray-500 block mb-0.5">Voltage:</span> <span className="font-semibold">{extractedData.voltage}</span></div>
-              </div>
-            </div>
-          )}
+
 
           {(!results || results.length === 0) ? (
             <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center shadow-sm">

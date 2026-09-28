@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
-import mammoth from 'mammoth';
 
 export async function POST(req: Request) {
-  const pdfParse = require('pdf-parse');
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File;
@@ -11,44 +9,35 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Empty file provided." }, { status: 400 });
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    let text = "";
+    // Forward the file to the Python backend to use PyPDF2 (lighter and more stable)
+    const backendFormData = new FormData();
+    backendFormData.append('file', file);
 
-    // Validate size (e.g. 10MB limit)
-    if (buffer.length > 10 * 1024 * 1024) {
-      return NextResponse.json({ error: "File exceeds 10MB size limit." }, { status: 400 });
+    // Check if API_URL is defined, else default
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+    const backendRes = await fetch(`${API_BASE}/api/extract_text`, {
+      method: 'POST',
+      body: backendFormData,
+    });
+
+    if (!backendRes.ok) {
+      return NextResponse.json({ error: "Failed to extract text from document." }, { status: backendRes.status });
     }
 
-    if (file.type === "application/pdf" || file.name.toLowerCase().endsWith('.pdf')) {
-      try {
-        const pdfData = await pdfParse(buffer);
-        text = pdfData.text;
-      } catch (err) {
-        return NextResponse.json({ error: "Text could not be extracted from this document. OCR processing is required or the PDF is corrupted." }, { status: 400 });
-      }
-    } else if (file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || file.name.toLowerCase().endsWith('.docx')) {
-      try {
-        const result = await mammoth.extractRawText({ buffer });
-        text = result.value;
-      } catch (err) {
-        return NextResponse.json({ error: "Failed to extract text from DOCX file. File may be corrupted." }, { status: 400 });
-      }
-    } else if (file.type === "text/plain" || file.name.toLowerCase().endsWith('.txt')) {
-      text = buffer.toString('utf-8');
-    } else {
-      return NextResponse.json({ error: "Unsupported file format. Please upload PDF, DOCX, or TXT." }, { status: 400 });
-    }
+    const backendData = await backendRes.json();
+    let text = backendData.text || "";
 
     if (!text || text.trim().length === 0) {
       return NextResponse.json({ error: "Text could not be extracted from this document. OCR processing is required." }, { status: 400 });
     }
 
     // Clean text
-    text = text.replace(/\\s+/g, ' ').trim();
+    text = text.replace(/\s+/g, ' ').trim();
 
     // Mock NLP extraction of structured fields based on common tender keywords
     const lowerText = text.toLowerCase();
-    
+
     const extractSection = (regex: RegExp) => {
       const match = text.match(regex);
       return match && match[1] ? match[1].trim() : "Not detected";

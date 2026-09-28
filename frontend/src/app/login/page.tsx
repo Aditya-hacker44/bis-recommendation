@@ -8,8 +8,8 @@ import { useAuth } from "../../context/AuthContext";
    ────────────────────────────────────────────── */
 const translations = {
   en: {
-    title: "AI-Powered Recommendation Engine for Indian Standards",
-    subheading: "Intelligent assistance for identifying relevant Indian Standards while preparing procurement specifications and tender documents.",
+    title: "DrishtiManak IS Recommendation",
+    subheading: "Indian Standards Recommendation & Tender Matching Platform",
     desc: "Analyze product descriptions, technical specifications, and tender documents using semantic AI to identify the most relevant Indian Standards, allied standards, normative references, latest amendments, and applicable certification requirements.",
     f1_title: "Analyze Product Description",
     f1_desc: "Understand product and technical requirements using AI",
@@ -335,7 +335,7 @@ export default function LoginPage() {
   ];
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col">
+    <div className="min-h-screen flex flex-col">
       {/* TOP TRICOLOR STRIP */}
       <div className="flex h-1">
         <div className="flex-1 bg-[#FF9933]" />
@@ -448,7 +448,7 @@ export default function LoginPage() {
       {/* ═══════════════════════════════════════════
           MAIN HERO + LOGIN
           ═══════════════════════════════════════════ */}
-      <main className="flex-1 relative bg-[#0a1f3f] flex flex-col justify-center">
+      <main className="flex-1 relative bg-[#0a1f3f] flex flex-col justify-center py-10 lg:py-0">
         {/* Background Image */}
         <div
           className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
@@ -470,9 +470,14 @@ export default function LoginPage() {
                   </span>
                 </div>
                 <h1 className="text-3xl sm:text-4xl lg:text-[2.75rem] font-extrabold leading-tight tracking-tight">
-                  {t.title.split('Indian Standards')[0]}
-                  {lang === 'en' && <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FFD700] to-[#FF9933]">Indian Standards</span>}
-                  {lang !== 'en' && <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FFD700] to-[#FF9933]">{t.title}</span>}
+                  {lang === 'en' ? (
+                    <div className="flex flex-col gap-1 sm:gap-2">
+                      <span>DrishtiManak</span>
+                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FFD700] to-[#FF9933]">IS Recommendation</span>
+                    </div>
+                  ) : (
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FFD700] to-[#FF9933]">{t.title}</span>
+                  )}
                 </h1>
               </div>
 

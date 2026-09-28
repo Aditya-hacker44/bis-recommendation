@@ -8,6 +8,7 @@ import { TENDERS_DB, TenderMatch } from "../data/tenders";
 import { getRecommendations } from "../services/recommendationEngine";
 import { db } from "../lib/firebase";
 import { collection, addDoc } from "firebase/firestore";
+import { useAuth } from "../context/AuthContext";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -93,6 +94,7 @@ function IconUsers() {
 }
 
 export default function SearchPage() {
+  const { user } = useAuth();   // ← Firebase current user
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [tenders, setTenders] = useState<TenderMatch[]>([]);
@@ -105,6 +107,7 @@ export default function SearchPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [resultsTab, setResultsTab] = useState<'recommended' | 'related' | 'cert' | 'gap' | 'generated'>('recommended');
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   // Tab State
   const [activeTab, setActiveTab] = useState<'quick' | 'manual' | 'upload'>('quick');
 
@@ -134,13 +137,17 @@ export default function SearchPage() {
   // Character count for textarea
   const [descCharCount, setDescCharCount] = useState(0);
 
-  // Load history from localStorage on mount
+  // Per-user localStorage key — isolates history per Firebase account
+  const historyKey = user?.uid ? `isrecommend_history_${user.uid}` : "isrecommend_history_guest";
+
+  // Load history from localStorage on mount / when user changes
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("isrecommend_history");
+      const saved = localStorage.getItem(historyKey);
       if (saved) setHistory(JSON.parse(saved));
+      else setHistory([]); // clear previous user's history from state
     } catch {}
-  }, []);
+  }, [historyKey]);
 
   function saveToHistory(q: string, stds: any[], tnds: TenderMatch[], cat: string, topIS: string) {
     const entry: HistoryEntry = {
@@ -154,7 +161,7 @@ export default function SearchPage() {
     };
     const updated = [entry, ...history].slice(0, 50);
     setHistory(updated);
-    localStorage.setItem("isrecommend_history", JSON.stringify(updated));
+    localStorage.setItem(historyKey, JSON.stringify(updated));
 
     // Save to Firebase for real history
     try {
@@ -174,7 +181,9 @@ export default function SearchPage() {
         complianceStatus: stds.length > 0 ? "Compliant" : "Non-Compliant",
         issuesFound: stds.length > 0 ? 0 : 1,
         recommendations: stds.length,
-        createdAt: now.toISOString()
+        createdAt: now.toISOString(),
+        userId: user?.uid || "guest",          // ← per-user isolation in Firestore
+        userEmail: user?.email || "guest",
       });
     } catch (err) {
       console.error("Firebase error saving history", err);
@@ -183,55 +192,45 @@ export default function SearchPage() {
 
   const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-  const downloadPDF = async () => {
-    const element = document.getElementById('report-content');
-    if (!element) return;
-    
-    // Clone content and remove action buttons
-    const clone = element.cloneNode(true) as HTMLElement;
-    const actionsEl = clone.querySelector('#report-actions');
-    if (actionsEl) actionsEl.remove();
-    // Remove any print:hidden elements
-    clone.querySelectorAll('[class*="print:hidden"]').forEach(el => el.remove());
+  const handleBackendReport = async (action: 'download' | 'view') => {
+    try {
+      const reportData = {
+        title: analysis?.category || query || "General Procurement",
+        dept: "Procurement Department",
+        compliance: "Analyzed",
+        standards: results.map(r => ({
+          is_number: r.is_number || r.isNumber,
+          title: r.title,
+          match_score: r.score ? Math.round(r.score * 100) : 95
+        }))
+      };
 
-    // Collect current page stylesheets
-    const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
-      .map(s => s.outerHTML).join('\n');
-
-    // Create a hidden iframe for clean printing
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = 'none';
-    document.body.appendChild(iframe);
-
-    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!iframeDoc) { document.body.removeChild(iframe); return; }
-
-    iframeDoc.open();
-    iframeDoc.write(`<!DOCTYPE html><html><head>
-      <title>IS-Recommend Report — DrishtiManak</title>
-      ${styles}
-      <style>
-        body { background: #fff; padding: 20px; font-family: system-ui, -apple-system, sans-serif; color: #172033; }
-        #report-actions { display: none !important; }
-        @page { size: A4; margin: 15mm; }
-        @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-      </style>
-    </head><body>
-      <div style="max-width:1100px;margin:0 auto;">${clone.innerHTML}</div>
-    </body></html>`);
-    iframeDoc.close();
-
-    // Wait for styles to load, then print
-    setTimeout(() => {
-      iframe.contentWindow?.print();
-      // Cleanup after print dialog closes
-      setTimeout(() => { document.body.removeChild(iframe); }, 1000);
-    }, 500);
+      const res = await fetch(`${API_BASE}/api/generate_report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ report_data: reportData })
+      });
+      
+      if (!res.ok) throw new Error("Failed to generate report from backend");
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      if (action === 'download') {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Gov-Report-${Date.now()}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+      } else {
+        setPdfPreviewUrl(url);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error generating official report from backend.");
+    }
   };
 
   async function handleSearch(e?: React.FormEvent, forceQuery?: string) {
@@ -758,17 +757,15 @@ export default function SearchPage() {
                   </div>
                 )}
 
-                {selectedFile && (
-                  <div className="mt-4 text-left">
-                    <button
-                      onClick={handleAnalyzeDocument}
-                      disabled={loading}
-                      className="w-full md:w-auto px-8 py-3 rounded-xl bg-gradient-to-r from-[#0B3558] to-[#1565C0] text-white font-bold tracking-wide hover:from-[#092a47] hover:to-[#1256a3] transition-all disabled:opacity-50 shadow-md"
-                    >
-                      Analyze Document
-                    </button>
-                  </div>
-                )}
+                <div className="mt-4 text-left">
+                  <button
+                    onClick={handleAnalyzeDocument}
+                    disabled={loading || !selectedFile}
+                    className="w-full md:w-auto px-8 py-3 rounded-xl bg-gradient-to-r from-[#0B3558] to-[#1565C0] text-white font-bold tracking-wide hover:from-[#092a47] hover:to-[#1256a3] transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-md"
+                  >
+                    {loading ? "Analyzing..." : "Analyze Document"}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -872,38 +869,7 @@ export default function SearchPage() {
       {searched && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           
-          {/* Extracted Information Section (Shown only if uploaded doc) */}
-          {extractedData && (
-            <div className="bg-white border border-[#16A34A]/30 rounded-2xl p-8 shadow-sm">
-              <h3 className="text-sm font-bold text-[#16A34A] uppercase tracking-wider mb-4 flex items-center gap-2">
-                <span>📄</span> Extracted Document Information
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
-                <div>
-                  <span className="text-gray-500 block text-xs uppercase tracking-wide mb-1">Product Name</span>
-                  <p className="font-semibold text-[#0B3558]">{extractedData.productName}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500 block text-xs uppercase tracking-wide mb-1">Product Description</span>
-                  <p className="font-medium text-[#172033] line-clamp-3">{extractedData.productDescription}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500 block text-xs uppercase tracking-wide mb-1">Technical Specifications</span>
-                  <p className="font-medium text-[#172033] line-clamp-3">{extractedData.technicalSpecifications}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500 block text-xs uppercase tracking-wide mb-1">Tender Requirements</span>
-                  <p className="font-medium text-[#172033] line-clamp-3">{extractedData.tenderRequirements}</p>
-                </div>
-              </div>
-              <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                 <div><span className="text-gray-500 block mb-0.5">Material:</span> <span className="font-semibold">{extractedData.material}</span></div>
-                 <div><span className="text-gray-500 block mb-0.5">Dimensions:</span> <span className="font-semibold">{extractedData.dimensions}</span></div>
-                 <div><span className="text-gray-500 block mb-0.5">Capacity:</span> <span className="font-semibold">{extractedData.capacity}</span></div>
-                 <div><span className="text-gray-500 block mb-0.5">Voltage:</span> <span className="font-semibold">{extractedData.voltage}</span></div>
-              </div>
-            </div>
-          )}
+
 
           {(!results || results.length === 0) ? (
             <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center shadow-sm">
@@ -945,23 +911,11 @@ export default function SearchPage() {
                     <span className="text-[#0B3558] font-bold">Dashboard</span> <span className="mx-1 text-gray-400">&gt;</span> <span className="text-[#0B3558] font-bold">Analysis</span> <span className="mx-1 text-gray-400">&gt;</span> <span className="text-gray-600">Results</span>
                   </div>
                   <div className="flex gap-2" data-html2canvas-ignore="true" id="report-actions">
-                    <button onClick={downloadPDF} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded text-[#0B3558] font-bold hover:bg-gray-50 text-[13px] print:hidden">
+                    <button onClick={() => handleBackendReport('download')} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded text-[#0B3558] font-bold hover:bg-gray-50 text-[13px] print:hidden">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                       Download Report
                     </button>
-                    <button onClick={() => {
-                        const reportEl = document.getElementById('report-content');
-                        if(!reportEl) return;
-                        const clone = reportEl.cloneNode(true) as HTMLElement;
-                        const actionsEl = clone.querySelector('#report-actions');
-                        if(actionsEl) actionsEl.remove();
-                        const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style')).map(s => s.outerHTML).join('');
-                        const win = window.open('', '_blank');
-                        if(!win) { alert('Pop-up blocked! Please allow pop-ups.'); return; }
-                        const reportHTML = '<!DOCTYPE html><html><head><title>IS-Recommend Report</title>' + styles + '<style>body{background:#fff;padding:24px;font-family:system-ui,-apple-system,sans-serif;}#report-actions{display:none!important;}.no-print-btn{margin-top:32px;text-align:center;}@media print{.no-print-btn{display:none!important;}}</style></head><body><div style="max-width:1200px;margin:0 auto;">' + clone.innerHTML + '</div><div class="no-print-btn"><button onclick="window.print()" style="padding:10px 28px;background:#0B3558;color:#fff;border:none;border-radius:8px;font-weight:bold;font-size:14px;cursor:pointer;">Print Report</button></div></body></html>';
-                        win.document.write(reportHTML);
-                        win.document.close();
-                    }} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded text-[#0B3558] font-bold hover:bg-gray-50 text-[13px] print:hidden">
+                    <button onClick={() => handleBackendReport('view')} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded text-[#0B3558] font-bold hover:bg-gray-50 text-[13px] print:hidden">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                       View Report
                     </button>
@@ -1200,6 +1154,49 @@ export default function SearchPage() {
         </div>
       </div>
       </div>
+      
+      {/* PDF Preview Modal */}
+      {pdfPreviewUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden">
+            <div className="flex justify-between items-center p-4 border-b bg-gray-50">
+              <h3 className="font-bold text-[#0B3558] text-lg">Report Preview</h3>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => {
+                    const a = document.createElement('a');
+                    a.href = pdfPreviewUrl;
+                    a.download = `Gov-Report-${Date.now()}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  }}
+                  className="px-4 py-1.5 bg-[#0B3558] text-white font-semibold rounded hover:bg-[#1E5F9E] text-sm"
+                >
+                  Download PDF
+                </button>
+                <button 
+                  onClick={() => {
+                    setPdfPreviewUrl(null);
+                    setTimeout(() => window.URL.revokeObjectURL(pdfPreviewUrl), 100);
+                  }}
+                  className="px-4 py-1.5 border border-gray-300 rounded text-gray-700 hover:bg-gray-100 font-semibold text-sm"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 bg-gray-200">
+              <iframe 
+                src={pdfPreviewUrl} 
+                className="w-full h-full border-none" 
+                title="PDF Report Preview"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

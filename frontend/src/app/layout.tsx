@@ -313,15 +313,17 @@ function UserProfileWidget() {
       </div>
       
       {/* Dropdown Menu */}
-      <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl py-2 hidden group-hover:block border border-gray-100">
-        <div className="px-4 py-2 border-b border-gray-100">
-          <p className="text-sm font-semibold text-gray-800 truncate">{name}</p>
-          <p className="text-xs text-gray-500 truncate">{user.email}</p>
+      <div className="absolute right-0 top-full pt-2 hidden group-hover:block">
+        <div className="w-48 bg-white rounded-lg shadow-xl py-2 border border-gray-100">
+          <div className="px-4 py-2 border-b border-gray-100">
+            <p className="text-sm font-semibold text-gray-800 truncate">{name}</p>
+            <p className="text-xs text-gray-500 truncate">{user.email}</p>
+          </div>
+          <button onClick={signOut} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-50 flex items-center gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            Sign Out
+          </button>
         </div>
-        <button onClick={signOut} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-50 flex items-center gap-2">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-          Sign Out
-        </button>
       </div>
     </div>
   );

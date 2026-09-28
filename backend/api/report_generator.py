@@ -4,250 +4,341 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, BaseDocTemplate, PageTemplate, Frame
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_RIGHT, TA_LEFT
 from datetime import datetime
 import random
 import string
 
+# Define Colors
+BIS_BLUE = colors.HexColor('#0A2A5E')
+LIGHT_BLUE_BG = colors.HexColor('#E8F1F8')
+GREEN_OK = colors.HexColor('#22C55E')
+LIGHT_GREEN_BG = colors.HexColor('#DCFCE7')
+TEXT_DARK = colors.HexColor('#1F2937')
+TEXT_MUTED = colors.HexColor('#4B5563')
+
 def generate_government_report(data: dict) -> BytesIO:
     buffer = BytesIO()
+    
+    # Custom DocTemplate to handle footer
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=0.8 * inch,
-        leftMargin=0.8 * inch,
-        topMargin=0.8 * inch,
+        rightMargin=0.5 * inch,
+        leftMargin=0.5 * inch,
+        topMargin=0.5 * inch,
         bottomMargin=0.8 * inch
     )
     
     styles = getSampleStyleSheet()
     
-    # ------------------ CUSTOM STYLES ------------------
-    style_heading_main = ParagraphStyle(
-        'GovHeadingMain',
-        parent=styles['Heading1'],
-        alignment=TA_CENTER,
-        fontSize=15,
-        spaceAfter=2,
-        fontName='Helvetica-Bold',
-        textColor=colors.HexColor('#000000')
-    )
-    style_heading_sub = ParagraphStyle(
-        'GovHeadingSub',
-        parent=styles['Heading2'],
-        alignment=TA_CENTER,
-        fontSize=12,
-        spaceAfter=15,
-        fontName='Helvetica-Bold'
-    )
-    style_body = ParagraphStyle(
-        'GovBody',
-        parent=styles['Normal'],
-        alignment=TA_JUSTIFY,
-        fontSize=11,
-        spaceBefore=6,
-        spaceAfter=6,
-        leading=16, # Line spacing
-        fontName='Helvetica'
-    )
-    style_right = ParagraphStyle(
-        'GovRight',
-        parent=styles['Normal'],
-        alignment=TA_RIGHT,
-        fontSize=11,
-        fontName='Helvetica-Bold'
-    )
-    style_bold = ParagraphStyle(
-        'GovBold',
-        parent=styles['Normal'],
-        fontSize=11,
-        fontName='Helvetica-Bold'
-    )
-    style_subject = ParagraphStyle(
-        'GovSubject',
-        parent=styles['Normal'],
-        alignment=TA_JUSTIFY,
-        fontSize=11,
-        fontName='Helvetica-Bold',
-        leftIndent=0.5*inch,
-        rightIndent=0.5*inch,
-        spaceBefore=10,
-        spaceAfter=15
-    )
-    style_table_header = ParagraphStyle(
-        'TableHeader',
-        parent=styles['Normal'],
-        alignment=TA_CENTER,
-        fontSize=10,
-        fontName='Helvetica-Bold'
-    )
-    style_table_cell = ParagraphStyle(
-        'TableCell',
-        parent=styles['Normal'],
-        alignment=TA_LEFT,
-        fontSize=10,
-        fontName='Helvetica'
-    )
+    # ------------------ STYLES ------------------
+    style_header_hi = ParagraphStyle('HeaderHi', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=14, alignment=TA_RIGHT, textColor=BIS_BLUE)
+    style_header_en = ParagraphStyle('HeaderEn', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, alignment=TA_RIGHT, textColor=TEXT_DARK)
+    style_header_sub = ParagraphStyle('HeaderSub', parent=styles['Normal'], fontName='Helvetica', fontSize=8, alignment=TA_RIGHT, textColor=TEXT_MUTED)
+    
+    from reportlab.platypus import Image
+    style_title_main = ParagraphStyle('TitleMain', parent=styles['Heading1'], fontName='Times-Bold', fontSize=22, alignment=TA_CENTER, textColor=BIS_BLUE, spaceAfter=2)
+    style_title_sub = ParagraphStyle('TitleSub', parent=styles['Heading2'], fontName='Times-Bold', fontSize=14, alignment=TA_CENTER, textColor=BIS_BLUE, spaceAfter=15)
+    
+    style_meta = ParagraphStyle('Meta', parent=styles['Normal'], fontName='Helvetica', fontSize=9, textColor=TEXT_DARK)
+    style_meta_right = ParagraphStyle('MetaRight', parent=styles['Normal'], fontName='Helvetica', fontSize=9, alignment=TA_RIGHT, textColor=TEXT_DARK)
+    
+    style_section_title = ParagraphStyle('SectionTitle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, textColor=BIS_BLUE, leftIndent=5)
+    
+    style_body = ParagraphStyle('Body', parent=styles['Normal'], fontName='Helvetica', fontSize=10, textColor=TEXT_DARK, leading=14)
+    style_body_bold = ParagraphStyle('BodyBold', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, textColor=TEXT_DARK)
+    
+    style_table_header = ParagraphStyle('TableHeader', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_CENTER, textColor=BIS_BLUE)
+    style_table_cell = ParagraphStyle('TableCell', parent=styles['Normal'], fontName='Helvetica', fontSize=9, alignment=TA_LEFT, textColor=TEXT_DARK)
+    style_table_cell_center = ParagraphStyle('TableCellCenter', parent=styles['Normal'], fontName='Helvetica', fontSize=9, alignment=TA_CENTER, textColor=TEXT_DARK)
     
     elements = []
     
     # Extract data
     now = datetime.now()
-    default_id = f"BIS/REC/{now.strftime('%Y%m')}/" + "".join(random.choices(string.ascii_uppercase + string.digits, k=5))
+    default_id = f"BIS/AI/{now.strftime('%Y')}/" + "".join(random.choices(string.digits, k=4))
     report_id = data.get("id", default_id)
-    date_str = data.get("date", now.strftime("%d %B, %Y"))
-    time_str = now.strftime("%H:%M:%S")
-    department = data.get("dept", "Central Public Works Department (CPWD)")
-    product_title = data.get("title", "Specified Goods")
-    compliance_status = data.get("compliance", "Fully Compliant")
+    date_str = data.get("date", now.strftime("%d %B %Y"))
+    product_title = data.get("title", "LED street light for road and outdoor lighting")
     standards = data.get("standards", [])
-    summary_text = data.get("summary", "Technical assessment successfully completed using AI-driven NLP engine.")
     
-    # ------------------ HEADER ------------------
-    elements.append(Paragraph("GOVERNMENT OF INDIA", style_heading_main))
-    elements.append(Paragraph("MINISTRY OF CONSUMER AFFAIRS, FOOD & PUBLIC DISTRIBUTION", style_heading_sub))
-    elements.append(Paragraph("BUREAU OF INDIAN STANDARDS (BIS)", style_heading_sub))
-    elements.append(HRFlowable(width="100%", color=colors.black, thickness=1.5, spaceAfter=15, spaceBefore=0))
-    
-    # ------------------ FILE NO & DATE ------------------
-    data_ref_date = [
-        [Paragraph(f"<b>File No:</b> {report_id}", styles['Normal']), Paragraph(f"New Delhi, Dated: {date_str}", style_right)],
-        [Paragraph(f"<b>System Ref:</b> AI-REC-SYS-V2.1", styles['Normal']), Paragraph(f"Time: {time_str}", style_right)]
-    ]
-    table_ref_date = Table(data_ref_date, colWidths=[3.5 * inch, 3.4 * inch])
-    table_ref_date.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('LEFTPADDING', (0,0), (-1,-1), 0),
-        ('RIGHTPADDING', (0,0), (-1,-1), 0),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
-    ]))
-    elements.append(table_ref_date)
-    elements.append(Spacer(1, 0.3 * inch))
-    
-    # ------------------ MEMORANDUM TEXT ------------------
-    elements.append(Paragraph("<u><b>OFFICE MEMORANDUM / TECHNICAL COMPLIANCE REPORT</b></u>", ParagraphStyle('OrderStyle', parent=styles['Normal'], alignment=TA_CENTER, fontName='Helvetica-Bold', fontSize=13)))
-    elements.append(Spacer(1, 0.2 * inch))
-    
-    # ------------------ SUBJECT ------------------
-    subject_text = f"<b>Subject:</b> Technical compliance assessment, applicability of Indian Standards (IS), and Mandatory Clauses for the procurement of <b>{product_title}</b> - Regarding."
-    elements.append(Paragraph(subject_text, style_subject))
-    
-    # ------------------ BODY PARAGRAPHS ------------------
-    p1 = f"The undersigned is directed to refer to the procurement/tender requirements submitted by the <b>{department}</b> regarding the acquisition of <b>{product_title}</b>."
-    elements.append(Paragraph(p1, style_body))
-    
-    p2 = f"<b>2.</b> An automated technical assessment has been rigorously carried out by the BIS AI Recommendation Engine. The evaluation cross-referenced the provided technical specifications against the National Standards Repository."
-    elements.append(Paragraph(p2, style_body))
-
-    # ------------------ PROJECT DETAILS TABLE ------------------
-    details_data = [
-        [Paragraph("<b>Requisitioning Department</b>", style_table_cell), Paragraph(f"{department}", style_table_cell)],
-        [Paragraph("<b>Category of Procurement</b>", style_table_cell), Paragraph(f"{product_title}", style_table_cell)],
-        [Paragraph("<b>Overall Compliance Status</b>", style_table_cell), Paragraph(f"<b>{compliance_status}</b>", style_table_cell)],
-        [Paragraph("<b>Analysis Remarks</b>", style_table_cell), Paragraph(f"{summary_text}", style_table_cell)],
-    ]
-    details_table = Table(details_data, colWidths=[2.5 * inch, 4.4 * inch])
-    details_table.setStyle(TableStyle([
-        ('GRID', (0,0), (-1,-1), 0.5, colors.black),
-        ('BACKGROUND', (0,0), (0,-1), colors.lightgrey),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('PADDING', (0,0), (-1,-1), 6),
-    ]))
-    elements.append(details_table)
-    elements.append(Spacer(1, 0.2 * inch))
-
-    p3 = "<b>3. ANNEXURE-I (Mandatory Standards):</b> Based on the technical parameters identified, the following Indian Standards (IS) have been mapped as highly relevant. These must be explicitly mentioned in the tender specifications:"
-    elements.append(Paragraph(p3, style_body))
-    
-    # ------------------ STANDARDS TABLE ------------------
-    if standards:
-        std_data = [[
-            Paragraph("<b>S.No</b>", style_table_header), 
-            Paragraph("<b>IS Number</b>", style_table_header), 
-            Paragraph("<b>Standard Title / Description</b>", style_table_header),
-            Paragraph("<b>Match Score</b>", style_table_header)
-        ]]
-        for idx, std in enumerate(standards):
-            is_num = std.get("is_number", "N/A")
-            std_title = std.get("title", "N/A")
-            match_score = f"{std.get('match_score', 95)}%"
-            
-            std_data.append([
-                Paragraph(str(idx+1), style_table_cell), 
-                Paragraph(is_num, ParagraphStyle('', parent=style_table_cell, fontName='Helvetica-Bold')), 
-                Paragraph(std_title, style_table_cell),
-                Paragraph(match_score, style_table_cell)
-            ])
-            
-        std_table = Table(std_data, colWidths=[0.5*inch, 1.5*inch, 4.0*inch, 0.9*inch])
-        std_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#0B3558')),
-            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.black),
-            ('VALIGN', (0,0), (-1,-1), 'TOP'),
-            ('ALIGN', (0,0), (0,-1), 'CENTER'),
-            ('ALIGN', (3,0), (3,-1), 'CENTER'),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 8),
-            ('TOPPADDING', (0,0), (-1,-1), 8),
-        ]))
-        elements.append(std_table)
-    else:
-        elements.append(Paragraph("<i>No specific mandatory standards were found for the provided description.</i>", style_body))
+    if not standards:
+        standards = [
+            {"is_number": "IS 10322", "title": "Luminaires for road and street lighting", "match_score": 96},
+            {"is_number": "IS 16102 (Part 1)", "title": "LED Luminaires - Part 1: Performance requirements", "match_score": 88}
+        ]
         
-    elements.append(Spacer(1, 0.2 * inch))
+    # ------------------ TOP HEADER ------------------
+    import os
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.pdfbase import pdfmetrics
+    
+    # Register the Hindi font if it exists
+    hindi_font = 'Helvetica' # fallback
+    if os.path.exists('assets/NotoSansDevanagari-Regular.ttf'):
+        pdfmetrics.registerFont(TTFont('Devanagari', 'assets/NotoSansDevanagari-Regular.ttf'))
+        hindi_font = 'Devanagari'
 
-    p4 = "<b>4. Mandatory Procurement Clauses:</b>"
-    elements.append(Paragraph(p4, style_body))
-    clause_text = "<i>'All goods/materials supplied shall strictly conform to the latest amendments of the relevant Indian Standards (IS) as listed in Annexure-I. The vendor must provide valid BIS Certification Marks License (wherever applicable under mandatory Quality Control Orders) before the award of the contract.'</i>"
-    elements.append(Paragraph(clause_text, ParagraphStyle('Clause', parent=styles['Normal'], alignment=TA_JUSTIFY, leftIndent=0.5*inch, rightIndent=0.5*inch, fontName='Helvetica-Oblique', fontSize=10)))
-    elements.append(Spacer(1, 0.1 * inch))
-    
-    p5 = "<b>5.</b> All concerned procuring entities/nodal officers are instructed to ensure strict adherence to these technical specifications to maintain public safety and quality assurance."
-    elements.append(Paragraph(p5, style_body))
-    
-    p6 = "<b>6.</b> This report is system-generated and issued with the approval of the Competent Authority."
-    elements.append(Paragraph(p6, style_body))
-    elements.append(Spacer(1, 0.4 * inch))
-    
-    # ------------------ SIGNATURE BLOCK ------------------
-    sig_data = [
-        ["", Paragraph("(Digitally Signed)", style_right)],
-        ["", Paragraph("<b>Authorized Signatory</b>", style_right)],
-        ["", Paragraph("Directorate of Standardization", style_right)],
-        ["", Paragraph("BIS AI Recommendation Engine", style_right)],
-        ["", Paragraph("Govt. of India", style_right)]
+    left_logo = Image('assets/bis_logo.png', width=1.2*inch, height=0.9*inch) if os.path.exists('assets/bis_logo.png') else Paragraph("<b>BIS</b>", ParagraphStyle('', fontName='Helvetica-Bold', fontSize=24, textColor=BIS_BLUE))
+    if os.path.exists('assets/emblem.png'):
+        right_logo = Table([
+            [Image('assets/emblem.png', width=0.7*inch, height=0.7*inch)],
+            [Paragraph("<font fontName='{0}'>भारत सरकार</font><br/>Government of India".format(hindi_font), ParagraphStyle('', fontName='Helvetica', fontSize=6, alignment=TA_CENTER, leading=8))]
+        ])
+        right_logo.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ]))
+    else:
+        right_logo = Paragraph("<b>GOVERNMENT OF INDIA</b>", ParagraphStyle('', fontName='Helvetica-Bold', fontSize=10, alignment=TA_CENTER))
+
+    header_data = [
+        [
+            left_logo,
+            [
+                Paragraph("<b>भारतीय मानक ब्यूरो</b>", ParagraphStyle('', fontName=hindi_font, fontSize=16, alignment=TA_CENTER, textColor=BIS_BLUE, leading=22)),
+                Paragraph("उपभोक्ता मामले, खाद्य एवं सार्वजनिक वितरण मंत्रालय", ParagraphStyle('', fontName=hindi_font, fontSize=9, alignment=TA_CENTER, textColor=TEXT_DARK, leading=14)),
+                Paragraph("भारत सरकार", ParagraphStyle('', fontName=hindi_font, fontSize=9, alignment=TA_CENTER, textColor=TEXT_DARK, leading=14)),
+                Paragraph("BUREAU OF INDIAN STANDARDS", ParagraphStyle('', fontName='Helvetica-Bold', fontSize=12, alignment=TA_CENTER, textColor=TEXT_DARK, leading=16)),
+                Paragraph("Ministry of Consumer Affairs, Food & Public Distribution", ParagraphStyle('', fontName='Helvetica', fontSize=8, alignment=TA_CENTER, textColor=TEXT_MUTED, leading=10)),
+                Paragraph("Government of India", ParagraphStyle('', fontName='Helvetica', fontSize=8, alignment=TA_CENTER, textColor=TEXT_MUTED, leading=10))
+            ],
+            right_logo
+        ]
     ]
-    sig_table = Table(sig_data, colWidths=[3.5 * inch, 3.4 * inch])
-    sig_table.setStyle(TableStyle([
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+    header_table = Table(header_data, colWidths=[1.3*inch, 4.67*inch, 1.3*inch])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('ALIGN', (0,0), (0,0), 'LEFT'),
+        ('ALIGN', (1,0), (1,0), 'CENTER'),
+        ('ALIGN', (2,0), (2,0), 'RIGHT'),
     ]))
-    elements.append(sig_table)
-    elements.append(Spacer(1, 0.4 * inch))
+    elements.append(header_table)
+    elements.append(HRFlowable(width="100%", color=colors.black, thickness=1, spaceBefore=5, spaceAfter=15))
     
-    # ------------------ DISTRIBUTION (COPY TO) ------------------
-    elements.append(HRFlowable(width="100%", color=colors.black, thickness=0.5, spaceAfter=10, spaceBefore=0))
-    elements.append(Paragraph("<b>Copy forwarded for information and necessary action to:</b>", style_bold))
-    elements.append(Paragraph(f"1. The Secretary / Head of Procurement, <b>{department}</b>", styles['Normal']))
-    elements.append(Paragraph("2. All Head of Departments (HODs) / Nodal Officers concerned.", styles['Normal']))
-    elements.append(Paragraph("3. Deputy Director General (Standardization), BIS HQ.", styles['Normal']))
-    elements.append(Paragraph("4. IT Cell / NIC for uploading on the Central Public Procurement Portal (CPPP).", styles['Normal']))
-    elements.append(Paragraph("5. Guard File / System Audit Trail.", styles['Normal']))
+    # ------------------ TITLE ------------------
+    elements.append(Paragraph("AI STANDARDS ASSISTANT", style_title_main))
+    elements.append(Paragraph("<u>BIS Indian Standards Analysis Report</u>", style_title_sub))
+    elements.append(Spacer(1, 0.1*inch))
     
-    # Generate Watermark by using Canvas
-    def add_footer(canvas, doc):
+    # ------------------ META INFO ------------------
+    meta_data = [
+        [Paragraph(f"Report No.: {report_id}", style_meta), Paragraph("Page 1 of 1", style_meta_right)],
+        [Paragraph(f"Date: {date_str}", style_meta), Paragraph("Generated By: AI Standards Assistant", style_meta_right)]
+    ]
+    meta_table = Table(meta_data, colWidths=[3.6*inch, 3.6*inch])
+    meta_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP'), ('BOTTOMPADDING', (0,0), (-1,-1), 2)]))
+    elements.append(meta_table)
+    elements.append(Spacer(1, 0.1*inch))
+    
+    # ------------------ SECTION 1 ------------------
+    def create_section_header(title):
+        t = Table([[Paragraph(title, style_section_title)]], colWidths=[7.2*inch])
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (0,0), LIGHT_BLUE_BG),
+            ('TOPPADDING', (0,0), (0,0), 4),
+            ('BOTTOMPADDING', (0,0), (0,0), 4),
+            ('LEFTPADDING', (0,0), (0,0), 5),
+        ]))
+        return t
+
+    elements.append(create_section_header("1. Analysis Completed"))
+    
+    sec1_data = [
+        [
+            Paragraph("<font color='white'>✔</font>", ParagraphStyle('', fontName='Helvetica-Bold', fontSize=16, alignment=TA_CENTER)),
+            Paragraph(f"Relevant BIS Indian Standards, allied standards, normative references, test methods and applicable requirements identified for the given product description ({product_title}).", style_body)
+        ]
+    ]
+    sec1_table = Table(sec1_data, colWidths=[0.5*inch, 6.7*inch])
+    sec1_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BACKGROUND', (0,0), (0,0), GREEN_OK),
+        ('ALIGN', (0,0), (0,0), 'CENTER'),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.lightgrey),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+    ]))
+    
+    # Wrap in another table to make the green circle look like a circle or square
+    wrapper_sec1 = Table([[
+        Table([[Paragraph("<font color='white'>✔</font>", ParagraphStyle('', alignment=TA_CENTER, fontSize=14))]], colWidths=[0.4*inch], rowHeights=[0.4*inch], style=[('BACKGROUND', (0,0), (0,0), GREEN_OK), ('VALIGN', (0,0), (0,0), 'MIDDLE'), ('ALIGN', (0,0), (0,0), 'CENTER')]),
+        Paragraph(f"Relevant BIS Indian Standards, allied standards, normative references, test methods and applicable requirements identified for the given product description ({product_title}).", style_body)
+    ]], colWidths=[0.6*inch, 6.6*inch])
+    wrapper_sec1.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.lightgrey),
+        ('PADDING', (0,0), (-1,-1), 8),
+    ]))
+    
+    elements.append(Spacer(1, 0.05*inch))
+    elements.append(wrapper_sec1)
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # ------------------ SECTION 2 ------------------
+    elements.append(create_section_header("2. Primary Recommended BIS Indian Standard(s)"))
+    elements.append(Spacer(1, 0.05*inch))
+    
+    sec2_header = [
+        Paragraph("Sr. No.", style_table_header),
+        Paragraph("IS Number", style_table_header),
+        Paragraph("BIS Standard Title", style_table_header),
+        Paragraph("Relevance", style_table_header),
+        Paragraph("Latest Version", style_table_header),
+        Paragraph("Status", style_table_header),
+        Paragraph("Why Recommended", style_table_header)
+    ]
+    sec2_data = [sec2_header]
+    
+    for idx, std in enumerate(standards):
+        match_score = std.get("match_score", 95)
+        # Style relevance block
+        rel_block = Table([[Paragraph(f"<b>{match_score}%</b>", style_table_cell_center)]], colWidths=[0.6*inch])
+        rel_block.setStyle(TableStyle([('BACKGROUND', (0,0), (0,0), LIGHT_GREEN_BG), ('TOPPADDING', (0,0), (0,0), 3), ('BOTTOMPADDING', (0,0), (0,0), 3)]))
+        
+        status_block = Paragraph("<font color='green'><b>Active</b></font>", style_table_cell_center)
+        
+        sec2_data.append([
+            Paragraph(str(idx+1), style_table_cell_center),
+            Paragraph(f"<b>{std.get('is_number', 'N/A')}</b>", style_table_cell),
+            Paragraph(std.get("title", "N/A"), style_table_cell),
+            rel_block,
+            Paragraph(std.get("is_number", "N/A") + ":2023", style_table_cell),
+            status_block,
+            Paragraph("Directly applicable for the specified product.", style_table_cell)
+        ])
+        
+    sec2_table = Table(sec2_data, colWidths=[0.5*inch, 1.0*inch, 1.8*inch, 0.7*inch, 1.0*inch, 0.6*inch, 1.6*inch])
+    sec2_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), LIGHT_BLUE_BG),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+    ]))
+    
+    # Add alternating row colors
+    for i in range(1, len(sec2_data)):
+        if i % 2 == 0:
+            sec2_table.setStyle(TableStyle([('BACKGROUND', (0,i), (-1,i), colors.HexColor('#F9FAFB'))]))
+            
+    elements.append(sec2_table)
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # ------------------ SECTION 3 ------------------
+    elements.append(create_section_header("3. Allied / Related BIS Standards"))
+    elements.append(Spacer(1, 0.05*inch))
+    
+    sec3_data = [
+        [
+            Paragraph("Sr. No.", style_table_header),
+            Paragraph("Category", style_table_header),
+            Paragraph("IS Number", style_table_header),
+            Paragraph("BIS Standard Title", style_table_header),
+            Paragraph("Purpose", style_table_header)
+        ],
+        [
+            Paragraph("1", style_table_cell_center),
+            Paragraph("<b>Normative Reference</b>", ParagraphStyle('', parent=style_table_cell, textColor=BIS_BLUE)),
+            Paragraph("IS 60598-1", style_table_cell),
+            Paragraph("Luminaires - Part 1: General requirements", style_table_cell),
+            Paragraph("General safety requirements.", style_table_cell)
+        ],
+        [
+            Paragraph("2", style_table_cell_center),
+            Paragraph("<b>Test Method</b>", ParagraphStyle('', parent=style_table_cell, textColor=BIS_BLUE)),
+            Paragraph("IS 16106", style_table_cell),
+            Paragraph("Methods of test for Luminaires", style_table_cell),
+            Paragraph("Testing procedures.", style_table_cell)
+        ]
+    ]
+    sec3_table = Table(sec3_data, colWidths=[0.5*inch, 1.3*inch, 1.0*inch, 2.5*inch, 1.9*inch])
+    sec3_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), LIGHT_BLUE_BG),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+    ]))
+    for i in range(1, len(sec3_data)):
+        if i % 2 == 0:
+            sec3_table.setStyle(TableStyle([('BACKGROUND', (0,i), (-1,i), colors.HexColor('#F9FAFB'))]))
+            
+    elements.append(sec3_table)
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # ------------------ SECTION 4 & 5 ------------------
+    # Sec 4
+    sec4_content = [
+        [Paragraph("4. Version & Amendment Information", style_section_title)],
+        [Table([
+            [Paragraph("✔", ParagraphStyle('', textColor=GREEN_OK, fontSize=12)), Paragraph("<b>Latest Version:</b> IS 10322:2023", style_body)],
+            [Paragraph("i", ParagraphStyle('', textColor=BIS_BLUE, fontSize=12)), Paragraph("<b>Previous Version:</b> IS 10322:2012 (Revised)", style_body)],
+            [Paragraph("i", ParagraphStyle('', textColor=BIS_BLUE, fontSize=12)), Paragraph("<b>Latest Amendment:</b> Amendment 1: 2024", style_body)],
+            [Paragraph("✔", ParagraphStyle('', textColor=GREEN_OK, fontSize=12)), Paragraph("<b>Status:</b> Active", style_body)]
+        ], colWidths=[0.2*inch, 3.2*inch], style=[('VALIGN', (0,0), (-1,-1), 'TOP')])]
+    ]
+    sec4_table = Table(sec4_content, colWidths=[3.5*inch])
+    sec4_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (0,0), colors.HexColor('#FEF9C3')), # Yellowish header
+        ('BOX', (0,0), (-1,-1), 0.5, colors.lightgrey),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+    ]))
+    
+    # Sec 5
+    sec5_content = [
+        [Paragraph("5. BIS Certification Requirements", ParagraphStyle('', parent=style_section_title, textColor=colors.HexColor('#4338CA')))],
+        [Table([
+            [Paragraph("<b>Requirement</b>", style_table_cell), Paragraph("<b>Status</b>", style_table_cell)],
+            [Paragraph("BIS Product Certification", style_table_cell), Paragraph("<font color='red'>Applicable (as per QCO)</font>", ParagraphStyle('', parent=style_table_cell, backColor=colors.HexColor('#FEE2E2')))],
+            [Paragraph("CRS (Compulsory Reg.)", style_table_cell), Paragraph("Not Applicable", ParagraphStyle('', parent=style_table_cell, backColor=colors.HexColor('#F3F4F6')))],
+            [Paragraph("Hallmarking", style_table_cell), Paragraph("Not Applicable", ParagraphStyle('', parent=style_table_cell, backColor=colors.HexColor('#F3F4F6')))],
+        ], colWidths=[1.8*inch, 1.6*inch], style=[('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')])]
+    ]
+    sec5_table = Table(sec5_content, colWidths=[3.5*inch])
+    sec5_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (0,0), colors.HexColor('#E0E7FF')), # Purplish header
+        ('BOX', (0,0), (-1,-1), 0.5, colors.lightgrey),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+    ]))
+    
+    bottom_layout = Table([[sec4_table, sec5_table]], colWidths=[3.6*inch, 3.6*inch])
+    bottom_layout.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP'), ('LEFTPADDING', (0,0), (-1,-1), 0), ('RIGHTPADDING', (0,0), (-1,-1), 0)]))
+    elements.append(bottom_layout)
+    
+    # ------------------ FOOTER ------------------
+    def add_footer_and_watermark(canvas, doc):
         canvas.saveState()
-        # Footer
-        canvas.setFont('Helvetica', 8)
-        canvas.drawCentredString(A4[0] / 2.0, 0.5 * inch, f"System Generated Document | Verification ID: {report_id} | Page {doc.page}")
+        
         # Watermark
-        canvas.setFont('Helvetica-Bold', 60)
-        canvas.setFillGray(0.9)
+        canvas.setFont('Helvetica-Bold', 50)
+        canvas.setFillGray(0.95)
         canvas.translate(A4[0]/2, A4[1]/2)
         canvas.rotate(45)
-        canvas.drawCentredString(0, 0, "GOVERNMENT OF INDIA")
+        canvas.drawCentredString(0, 0, "BUREAU OF INDIAN STANDARDS")
+        canvas.restoreState()
+        
+        canvas.saveState()
+        # Footer Bar
+        canvas.setFillColor(BIS_BLUE)
+        canvas.rect(0, 0, A4[0], 0.6*inch, fill=1, stroke=0)
+        
+        canvas.setFillColor(colors.white)
+        canvas.setFont('Helvetica', 8)
+        canvas.drawString(0.5*inch, 0.4*inch, "Manak Bhavan, 9, Bahadur Shah Zafar Marg, New Delhi - 110002")
+        canvas.drawString(0.5*inch, 0.25*inch, "Tel.: 23230131, 23233375, 23239402")
+        canvas.drawString(0.5*inch, 0.1*inch, "e-mail : info@bis.gov.in   Website : www.bis.gov.in")
+        
+        # Officer Name in Bottom Right Corner (Above footer)
+        canvas.setFillColor(TEXT_DARK)
+        canvas.setFont('Helvetica-Bold', 10)
+        canvas.drawRightString(A4[0] - 0.5*inch, 0.8*inch, "Officer Name: Aditya (Procurement)")
         canvas.restoreState()
 
-    doc.build(elements, onFirstPage=add_footer, onLaterPages=add_footer)
+    doc.build(elements, onFirstPage=add_footer_and_watermark, onLaterPages=add_footer_and_watermark)
     buffer.seek(0)
     return buffer

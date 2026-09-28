@@ -7,7 +7,10 @@ USER user
 # Set environment variables
 ENV HOME=/home/user \
     PATH=/home/user/.local/bin:$PATH \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONOPTIMIZE=1 \
+    FASTEMBED_CACHE_PATH=/home/user/.cache/fastembed
 
 WORKDIR $HOME/app
 

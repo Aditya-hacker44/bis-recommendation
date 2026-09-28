@@ -1,12 +1,21 @@
+# ── Core API framework ───────────────────────────────────────────────────────
 fastapi>=0.110.0
-uvicorn>=0.28.0
+uvicorn[standard]>=0.28.0
 pydantic>=2.6.0
 python-dotenv>=1.0.1
-fastembed>=0.2.7
-faiss-cpu>=1.8.0
-google-generativeai>=0.8.3
 python-multipart>=0.0.9
 requests>=2.31.0
+
+# ── Vector search (ONNX-based, no PyTorch/TF) ───────────────────────────────
+fastembed>=0.3.1
+faiss-cpu>=1.8.0
+
+# ── Gemini API (HTTP-only SDK, no grpcio/protobuf bloat) ────────────────────
+google-genai>=1.0.0
+
+# ── Document parsing ─────────────────────────────────────────────────────────
+pypdf>=4.0.0
 python-docx>=1.1.0
-PyPDF2>=3.0.0
+
+# ── PDF report generation ────────────────────────────────────────────────────
 reportlab>=4.0.0

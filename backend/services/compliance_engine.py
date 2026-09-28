@@ -1,7 +1,7 @@
 import re
 from typing import List, Dict, Any
 
-from backend.services.recommendation_engine import get_recommendations
+from services.recommendation_engine import get_recommendations
 
 def extract_requirements(text: str) -> List[Dict[str, str]]:
     """

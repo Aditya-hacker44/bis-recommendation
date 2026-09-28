@@ -3,6 +3,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+from fastapi import UploadFile, File
+import io
+import traceback
 
 # Local imports (mocked paths for the other agents' outputs)
 import sys
@@ -114,9 +117,37 @@ async def get_recommendation_api(request: RecommendRequestAPI, req: Request = No
         
         return result
     except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/extract_text")
+async def extract_text_api(file: UploadFile = File(...)):
+    try:
+        content = await file.read()
+        filename = file.filename.lower()
+        text = ""
+
+        if filename.endswith(".pdf"):
+            from pypdf import PdfReader
+            pdf_reader = PdfReader(io.BytesIO(content))
+            for page in pdf_reader.pages:
+                text += (page.extract_text() or "") + "\n"
+        elif filename.endswith(".docx"):
+            import docx
+            doc = docx.Document(io.BytesIO(content))
+            text = "\n".join([para.text for para in doc.paragraphs])
+        else:
+            text = content.decode('utf-8', errors='ignore')
+
+        if not text.strip():
+            raise ValueError("No text could be extracted.")
+
+        return {"success": True, "text": text}
+    except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.get("/standards/{id}/graph")
