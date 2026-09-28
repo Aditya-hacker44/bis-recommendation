@@ -4,11 +4,43 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, BaseDocTemplate, PageTemplate, Frame
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, Image
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_RIGHT, TA_LEFT
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase import pdfmetrics
 from datetime import datetime
 import random
 import string
+
+import os
+import sys
+
+# More robust path resolution for deployed environments (e.g., Render, HF Spaces, Docker)
+def _get_assets_dir():
+    # 1. Try relative to the current file (standard)
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(base_dir, "assets")
+    if os.path.exists(path) and os.path.isdir(path):
+        return path
+        
+    # 2. Try relative to the current working directory
+    path = os.path.join(os.getcwd(), "assets")
+    if os.path.exists(path) and os.path.isdir(path):
+        return path
+        
+    # 3. Try one level up from cwd (if running from within backend/api)
+    path = os.path.join(os.path.dirname(os.getcwd()), "assets")
+    if os.path.exists(path) and os.path.isdir(path):
+        return path
+        
+    # 4. Try inside backend folder if cwd is root
+    path = os.path.join(os.getcwd(), "backend", "assets")
+    if os.path.exists(path) and os.path.isdir(path):
+        return path
+        
+    return os.path.join(base_dir, "assets") # Fallback
+
+ASSETS_DIR = _get_assets_dir()
 
 # Define Colors
 BIS_BLUE = colors.HexColor('#0A2A5E')
@@ -71,21 +103,29 @@ def generate_government_report(data: dict) -> BytesIO:
         ]
         
     # ------------------ TOP HEADER ------------------
-    import os
-    from reportlab.pdfbase.ttfonts import TTFont
-    from reportlab.pdfbase import pdfmetrics
-    
-    # Register the Hindi font if it exists
-    hindi_font = 'Helvetica' # fallback
-    if os.path.exists('assets/NotoSansDevanagari-Regular.ttf'):
-        pdfmetrics.registerFont(TTFont('Devanagari', 'assets/NotoSansDevanagari-Regular.ttf'))
-        hindi_font = 'Devanagari'
+    # ── Font & Asset Paths (absolute, works on any server) ──────────────────
+    font_path   = os.path.join(ASSETS_DIR, "NotoSansDevanagari-Regular.ttf")
+    logo_path   = os.path.join(ASSETS_DIR, "bis_logo.png")
+    emblem_path = os.path.join(ASSETS_DIR, "emblem.png")
 
-    left_logo = Image('assets/bis_logo.png', width=1.2*inch, height=0.9*inch) if os.path.exists('assets/bis_logo.png') else Paragraph("<b>BIS</b>", ParagraphStyle('', fontName='Helvetica-Bold', fontSize=24, textColor=BIS_BLUE))
-    if os.path.exists('assets/emblem.png'):
+    # Register Hindi/Devanagari font if available
+    hindi_font = 'Helvetica'  # fallback
+    if os.path.exists(font_path):
+        try:
+            pdfmetrics.registerFont(TTFont('Devanagari', font_path))
+            hindi_font = 'Devanagari'
+        except Exception:
+            pass  # Keep Helvetica fallback silently
+
+    left_logo = (Image(logo_path, width=1.2*inch, height=0.9*inch)
+                 if os.path.exists(logo_path)
+                 else Paragraph("<b>BIS</b>", ParagraphStyle('', fontName='Helvetica-Bold', fontSize=24, textColor=BIS_BLUE)))
+
+    if os.path.exists(emblem_path):
         right_logo = Table([
-            [Image('assets/emblem.png', width=0.7*inch, height=0.7*inch)],
-            [Paragraph("<font fontName='{0}'>भारत सरकार</font><br/>Government of India".format(hindi_font), ParagraphStyle('', fontName='Helvetica', fontSize=6, alignment=TA_CENTER, leading=8))]
+            [Image(emblem_path, width=0.7*inch, height=0.7*inch)],
+            [Paragraph("<font fontName='{0}'>भारत सरकार</font><br/>Government of India".format(hindi_font),
+                       ParagraphStyle('', fontName='Helvetica', fontSize=6, alignment=TA_CENTER, leading=8))]
         ])
         right_logo.setStyle(TableStyle([
             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
