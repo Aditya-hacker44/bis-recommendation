@@ -103,19 +103,9 @@ def generate_government_report(data: dict) -> BytesIO:
         ]
         
     # ------------------ TOP HEADER ------------------
-    # ── Font & Asset Paths (absolute, works on any server) ──────────────────
-    font_path   = os.path.join(ASSETS_DIR, "NotoSansDevanagari-Regular.ttf")
+    # ── Asset Paths (absolute, works on any server) ──────────────────
     logo_path   = os.path.join(ASSETS_DIR, "bis_logo.png")
     emblem_path = os.path.join(ASSETS_DIR, "emblem.png")
-
-    # Register Hindi/Devanagari font if available
-    hindi_font = 'Helvetica'  # fallback
-    if os.path.exists(font_path):
-        try:
-            pdfmetrics.registerFont(TTFont('Devanagari', font_path))
-            hindi_font = 'Devanagari'
-        except Exception:
-            pass  # Keep Helvetica fallback silently
 
     left_logo = (Image(logo_path, width=1.2*inch, height=0.9*inch)
                  if os.path.exists(logo_path)
@@ -124,7 +114,7 @@ def generate_government_report(data: dict) -> BytesIO:
     if os.path.exists(emblem_path):
         right_logo = Table([
             [Image(emblem_path, width=0.7*inch, height=0.7*inch)],
-            [Paragraph("<font fontName='{0}'>भारत सरकार</font><br/>Government of India".format(hindi_font),
+            [Paragraph("Government of India",
                        ParagraphStyle('', fontName='Helvetica', fontSize=6, alignment=TA_CENTER, leading=8))]
         ])
         right_logo.setStyle(TableStyle([
@@ -138,12 +128,9 @@ def generate_government_report(data: dict) -> BytesIO:
         [
             left_logo,
             [
-                Paragraph("<b>भारतीय मानक ब्यूरो</b>", ParagraphStyle('', fontName=hindi_font, fontSize=16, alignment=TA_CENTER, textColor=BIS_BLUE, leading=22)),
-                Paragraph("उपभोक्ता मामले, खाद्य एवं सार्वजनिक वितरण मंत्रालय", ParagraphStyle('', fontName=hindi_font, fontSize=9, alignment=TA_CENTER, textColor=TEXT_DARK, leading=14)),
-                Paragraph("भारत सरकार", ParagraphStyle('', fontName=hindi_font, fontSize=9, alignment=TA_CENTER, textColor=TEXT_DARK, leading=14)),
-                Paragraph("BUREAU OF INDIAN STANDARDS", ParagraphStyle('', fontName='Helvetica-Bold', fontSize=12, alignment=TA_CENTER, textColor=TEXT_DARK, leading=16)),
-                Paragraph("Ministry of Consumer Affairs, Food & Public Distribution", ParagraphStyle('', fontName='Helvetica', fontSize=8, alignment=TA_CENTER, textColor=TEXT_MUTED, leading=10)),
-                Paragraph("Government of India", ParagraphStyle('', fontName='Helvetica', fontSize=8, alignment=TA_CENTER, textColor=TEXT_MUTED, leading=10))
+                Paragraph("<b>BUREAU OF INDIAN STANDARDS</b>", ParagraphStyle('', fontName='Helvetica-Bold', fontSize=16, alignment=TA_CENTER, textColor=BIS_BLUE, leading=22)),
+                Paragraph("Ministry of Consumer Affairs, Food & Public Distribution", ParagraphStyle('', fontName='Helvetica', fontSize=9, alignment=TA_CENTER, textColor=TEXT_DARK, leading=14)),
+                Paragraph("Government of India", ParagraphStyle('', fontName='Helvetica', fontSize=9, alignment=TA_CENTER, textColor=TEXT_DARK, leading=14)),
             ],
             right_logo
         ]

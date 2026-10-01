@@ -105,6 +105,11 @@ export default function SearchPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [resultsTab, setResultsTab] = useState<'recommended' | 'related' | 'cert' | 'gap' | 'generated'>('recommended');
+  
+  // Loading states for report generation
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isViewing, setIsViewing] = useState(false);
+
   // Tab State
   const [activeTab, setActiveTab] = useState<'quick' | 'manual' | 'upload'>('quick');
 
@@ -164,25 +169,31 @@ export default function SearchPage() {
   const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
   const downloadPDF = async () => {
-    const element = document.getElementById('report-content');
-    if (!element) return;
-    
-    // Dynamically import html2pdf
-    // @ts-ignore
-    const html2pdf = (await import('html2pdf.js')).default;
-    
-    const opt = {
-      margin:       10,
-      filename:     'IS-Recommend-Report.pdf',
-      image:        { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas:  { scale: 2 },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
-    };
-    
-    html2pdf().set(opt).from(element).save();
+    setIsDownloading(true);
+    try {
+      const element = document.getElementById('report-content');
+      if (!element) return;
+      
+      // Dynamically import html2pdf
+      // @ts-ignore
+      const html2pdf = (await import('html2pdf.js')).default;
+      
+      const opt = {
+        margin:       10,
+        filename:     'IS-Recommend-Report.pdf',
+        image:        { type: 'jpeg' as const, quality: 0.98 },
+        html2canvas:  { scale: 2 },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
+      };
+      
+      await html2pdf().set(opt).from(element).save();
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const handleBackendReport = async (action: 'download' | 'view') => {
+    setIsViewing(true);
     try {
       const reportData = {
         title: analysis?.category || query || "General Procurement",
@@ -221,6 +232,8 @@ export default function SearchPage() {
     } catch (err) {
       console.error(err);
       alert("Error generating official report from backend.");
+    } finally {
+      setIsViewing(false);
     }
   };
 
@@ -883,13 +896,21 @@ export default function SearchPage() {
                     <span className="text-[#0B3558] font-bold">Dashboard</span> <span className="mx-1 text-gray-400">&gt;</span> <span className="text-[#0B3558] font-bold">Analysis</span> <span className="mx-1 text-gray-400">&gt;</span> <span className="text-gray-600">Results</span>
                   </div>
                   <div className="flex gap-2" data-html2canvas-ignore="true" id="report-actions">
-                    <button onClick={downloadPDF} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded text-[#0B3558] font-bold hover:bg-gray-50 text-[13px] print:hidden">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                      Download Report
+                    <button onClick={downloadPDF} disabled={isDownloading} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded text-[#0B3558] font-bold hover:bg-gray-50 text-[13px] print:hidden disabled:opacity-50">
+                      {isDownloading ? (
+                        <div className="w-3.5 h-3.5 border-2 border-[#0B3558] border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      )}
+                      {isDownloading ? 'Generating...' : 'Download Report'}
                     </button>
-                    <button onClick={() => handleBackendReport('view')} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded text-[#0B3558] font-bold hover:bg-gray-50 text-[13px] print:hidden">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                      View Report
+                    <button onClick={() => handleBackendReport('view')} disabled={isViewing} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded text-[#0B3558] font-bold hover:bg-gray-50 text-[13px] print:hidden disabled:opacity-50">
+                      {isViewing ? (
+                        <div className="w-3.5 h-3.5 border-2 border-[#0B3558] border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                      )}
+                      {isViewing ? 'Opening...' : 'View Report'}
                     </button>
                     <button onClick={() => { setSearched(false); setQuery(""); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="flex items-center gap-1.5 px-3 py-1.5 border border-[#0B3558] text-[#0B3558] rounded font-bold hover:bg-blue-50 text-[13px] print:hidden">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>

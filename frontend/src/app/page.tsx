@@ -102,6 +102,7 @@ export default function SearchPage() {
   const [backendData, setBackendData] = useState<any>(null);
   
   const [loading, setLoading] = useState(false);
+  const [isReportLoading, setIsReportLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState("");
   const [searched, setSearched] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -194,6 +195,7 @@ export default function SearchPage() {
 
   const handleBackendReport = async (action: 'download' | 'view') => {
     try {
+      setIsReportLoading(true);
       const reportData = {
         title: analysis?.category || query || "General Procurement",
         dept: "Procurement Department",
@@ -230,6 +232,8 @@ export default function SearchPage() {
     } catch (err) {
       console.error(err);
       alert("Error generating official report from backend.");
+    } finally {
+      setIsReportLoading(false);
     }
   };
 
@@ -911,13 +915,21 @@ export default function SearchPage() {
                     <span className="text-[#0B3558] font-bold">Dashboard</span> <span className="mx-1 text-gray-400">&gt;</span> <span className="text-[#0B3558] font-bold">Analysis</span> <span className="mx-1 text-gray-400">&gt;</span> <span className="text-gray-600">Results</span>
                   </div>
                   <div className="flex gap-2" data-html2canvas-ignore="true" id="report-actions">
-                    <button onClick={() => handleBackendReport('download')} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded text-[#0B3558] font-bold hover:bg-gray-50 text-[13px] print:hidden">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                      Download Report
+                    <button disabled={isReportLoading} onClick={() => handleBackendReport('download')} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded text-[#0B3558] font-bold hover:bg-gray-50 text-[13px] print:hidden disabled:opacity-50">
+                      {isReportLoading ? (
+                        <div className="w-4 h-4 border-2 border-[#0B3558] border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      )}
+                      {isReportLoading ? "Generating..." : "Download Report"}
                     </button>
-                    <button onClick={() => handleBackendReport('view')} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded text-[#0B3558] font-bold hover:bg-gray-50 text-[13px] print:hidden">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                      View Report
+                    <button disabled={isReportLoading} onClick={() => handleBackendReport('view')} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded text-[#0B3558] font-bold hover:bg-gray-50 text-[13px] print:hidden disabled:opacity-50">
+                      {isReportLoading ? (
+                        <div className="w-4 h-4 border-2 border-[#0B3558] border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                      )}
+                      {isReportLoading ? "Generating..." : "View Report"}
                     </button>
                     <button onClick={() => { setSearched(false); setQuery(""); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="flex items-center gap-1.5 px-3 py-1.5 border border-[#0B3558] text-[#0B3558] rounded font-bold hover:bg-blue-50 text-[13px] print:hidden">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
